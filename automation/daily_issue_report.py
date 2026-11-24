@@ -44,9 +44,16 @@ def parse_timestamp(value, row_number):
             parsed = parsed.astimezone(TZ)
         return parsed, True
     except ValueError:
-        if any(ch.isdigit() for ch in raw):
-            raise SystemExit(f"Unrecognized Timestamp Issues Raised on CSV row {row_number}: {raw!r}; refusing to send an incomplete report")
-        return None, False
+        pass
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%m/%d/%Y"):
+        try:
+            day = dt.datetime.strptime(raw, fmt).date()
+            return dt.datetime.combine(day, dt.time.min, TZ), False
+        except ValueError:
+            pass
+    if any(ch.isdigit() for ch in raw):
+        raise SystemExit(f"Unrecognized Timestamp Issues Raised on CSV row {row_number}: {raw!r}; refusing to send an incomplete report")
+    return None, False
 
 def is_customer_footage(row):
     sub_request = (row.get("Sub-request") or "").strip().casefold()
@@ -68,7 +75,8 @@ with SOURCE.open(encoding="utf-8-sig", newline="") as f:
         if raised is None:
             continue
         if not has_time:
-            date_only_or_missing += 1
+            if START.date() <= raised.date() <= END.date():
+                date_only_or_missing += 1
             continue
         if not (START <= raised < END) or not is_customer_footage(row):
             continue
