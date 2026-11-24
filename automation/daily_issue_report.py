@@ -76,12 +76,16 @@ with SOURCE.open(encoding="utf-8-sig", newline="") as f:
             in_window = START <= raised < END
         if not in_window:
             continue
+        request = (source_row.get("Sub-request") or "").strip()
+        # This email is specifically for customer requested footage, not AI camera events.
+        if "footage" not in request.casefold():
+            continue
         incident = (source_row.get("Incident Type") or "").strip()
         issues.append({
             "client": (source_row.get("Clients") or "").strip() or "Client not stated",
             "vehicle": (source_row.get("Vehicle Number") or "").strip() or "Vehicle not stated",
             "priority": "Critical" if incident.lower() == "critical" else ("No critical" if incident else "Not specified"),
-            "request": (source_row.get("Sub-request") or "").strip() or "Request not stated",
+            "request": request,
             "details": (source_row.get("Issue Details") or "").strip() or "No issue details recorded",
             "remarks": (source_row.get("Remarks (Incident Details)") or "").strip() or "No incident remarks recorded",
             "resolved": (source_row.get("Resolved Y/N") or "").strip() or "Not stated",
@@ -105,20 +109,18 @@ counts = {
 def badge(text, kind):
     return f'<span class="pill {kind}">{esc(text)}</span>'
 
-rows = []
+cards = []
 for item in issues:
     p_class = {"Critical": "critical", "No critical": "normal", "Not specified": "unspecified"}[item["priority"]]
     r_class = {"yes": "resolved", "no": "open", "not required": "not-required"}.get(item["resolved"].lower(), "unspecified")
-    issue = f'<strong>{esc(item["request"])}</strong><span class="detail">{esc(item["details"])}</span>'
-    rows.append(f"""<tr>
-      <td class="client-cell" data-label="Client"><strong>{esc(item['client'])}</strong></td>
-      <td class="vehicle-cell" data-label="Vehicle">{esc(item['vehicle'])}</td>
-      <td data-label="Criticality">{badge(item['priority'], p_class)}</td>
-      <td class="issue-cell" data-label="Issue / request">{issue}</td>
-      <td data-label="Incident remarks">{esc(item['remarks'])}</td>
-      <td data-label="Resolved?">{badge(item['resolved'], r_class)}</td>
-      <td data-label="Current status">{esc(item['status'])}</td>
-    </tr>""")
+    cards.append(f"""<article class="issue-card">
+      <div class="card-top"><div><div class="client">{esc(item['client'])}</div><div class="vehicle">Vehicle {esc(item['vehicle'])}</div></div>
+        <div class="badges">{badge(item['priority'], p_class)}{badge(item['resolved'], r_class)}</div></div>
+      <div class="card-body"><div class="field"><span class="label">Footage requested</span><strong>{esc(item['request'])}</strong></div>
+        <div class="field"><span class="label">Issue details</span><span>{esc(item['details'])}</span></div>
+        <div class="field"><span class="label">Remarks</span><span>{esc(item['remarks'])}</span></div>
+        <div class="field"><span class="label">Current status</span><span>{esc(item['status'])}</span></div></div>
+    </article>""")
 
 clients = len({x["client"] for x in issues})
 date_only_count = sum(item["time_uncertain"] for item in issues)
@@ -135,103 +137,41 @@ document = f"""<!DOCTYPE html>
   <meta name="supported-color-schemes" content="light dark">
   <title>Cautio | Daily Fleet Issue Report</title>
   <style>
-    :root {{ --ink:#0A0F1C; --green:#10B981; --cyan:#06B6D4; --text:#0F172A; --muted:#64748B; --line:#E2E8F0; --paper:#FFFFFF; --bg:#F1F5F9; }}
     * {{ box-sizing:border-box; }}
-    body {{ margin:0; padding:24px 16px; background:#F7F7F4; color:var(--text); font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }}
-    .report {{ max-width:1100px; margin:0 auto; overflow:hidden; background:var(--paper); border:1px solid #E3E5E0; }}
-    .accent {{ height:4px; background:#177A51; }}
-    .hero {{ padding:24px 30px 21px; color:#fff; background:var(--ink); }}
-    .brand-row {{ display:flex; justify-content:space-between; align-items:center; gap:20px; }}
-    .brand {{ display:flex; align-items:center; }} .brand-lockup {{ display:flex; flex-direction:column; align-items:flex-start; gap:0; }}
-    .logo {{ display:block; width:120px; height:36px; }}
-    .tagline {{ margin-top:2px; color:#94A3B8; font-size:11px; }}
-    h1 {{ margin:20px 0 5px; font-size:25px; line-height:1.2; letter-spacing:-.35px; }}
-    .subhead {{ margin:0; color:#CBD5E1; font-size:12px; }}
-    .window {{ display:inline-block; margin-top:14px; color:#B9C8C0; font-size:11px; }}
-    .content {{ padding:24px 28px 26px; }}
-    .section-heading {{ display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin-bottom:11px; }}
-    h2 {{ margin:0; font-size:12px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:#334155; }}
-    .section-note {{ color:#64748B; font-size:11px; }}
-    .summary-grid {{ display:grid; grid-template-columns:repeat(4,1fr); margin-bottom:15px; border-top:1px solid #D9DDD8; border-bottom:1px solid #D9DDD8; }}
-    .metric {{ min-height:70px; padding:11px 15px 10px; border-right:1px solid #E5E8E3; }} .metric:last-child {{ border-right:0; }}
-    .metric-label {{ color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.35px; text-transform:uppercase; }}
-    .metric-value {{ margin-top:3px; color:#0F172A; font-size:23px; line-height:1.1; font-weight:700; }}
-    .metric-hint {{ margin-top:3px; color:#64748B; font-size:10px; }}
-    .metric.critical .metric-value {{ color:#A33A32; }}
-    .metric.normal .metric-value {{ color:#176B48; }}
-    .metric.unknown .metric-value {{ color:#8A5B18; }}
-    .summary-table {{ width:100%; min-width:0; margin:0 0 22px; border-collapse:collapse; table-layout:auto; }}
-    .summary-table th {{ padding:8px 7px; border:1px solid #D7DDD8; background:#F5F6F3; color:#526158; text-align:center; font-size:9px; font-weight:700; letter-spacing:.25px; text-transform:uppercase; }}
-    .summary-table th:nth-child(even) {{ background:#EAF0EB; }}
-    .summary-table td {{ padding:9px 7px; border:1px solid #D7DDD8; color:#0F172A; text-align:center; font-size:14px; font-weight:700; background:#FFFFFF; }}
-    .summary-table td:nth-child(even) {{ background:#F2F6F2; }}
-    .summary-table td.critical {{ color:#A33A32; }} .summary-table td.normal {{ color:#176B48; }} .summary-table td.unknown {{ color:#8A5B18; }}
-    .table-shell {{ overflow:hidden; border-top:1px solid #D7DDD8; border-bottom:1px solid #D7DDD8; }}
-    .scroll {{ overflow-x:auto; }}
-    table {{ width:100%; min-width:920px; border-collapse:collapse; table-layout:fixed; }}
-    .issue-table {{ min-width:920px; }}
-    col.client {{ width:15%; }} col.vehicle {{ width:10%; }} col.priority {{ width:10%; }} col.issue {{ width:22%; }} col.remarks {{ width:18%; }} col.resolved {{ width:10%; }} col.status {{ width:15%; }}
-    thead {{ background:#F5F6F3; }} th {{ padding:10px 11px; border-bottom:1px solid #D7DDD8; color:#526158; text-align:left; font-size:9px; font-weight:700; letter-spacing:.45px; text-transform:uppercase; }}
-    td {{ padding:10px 11px; border-bottom:1px solid #E7EAE6; color:#334155; vertical-align:top; font-size:11px; line-height:1.45; overflow-wrap:anywhere; }}
-    .issue-table tbody tr:nth-child(odd) td {{ background:#FFFFFF; }}
-    .issue-table tbody tr:nth-child(odd) td:nth-child(even) {{ background:#F2F6F2; }}
-    .issue-table tbody tr:nth-child(even) td {{ background:#F8FAF8; }}
-    .issue-table tbody tr:nth-child(even) td:nth-child(even) {{ background:#EAF0EB; }}
-    .issue-table tbody tr:last-child td {{ border-bottom:0; }}
-    .client-cell strong {{ display:block; color:#0F172A; font-size:11px; }} .vehicle-cell {{ color:#64748B; font:10px ui-monospace,SFMono-Regular,Menlo,monospace; }}
-    .issue-cell strong {{ display:block; color:#0F172A; font-weight:700; }} .detail {{ display:block; margin-top:3px; color:#475569; }}
-    .pill {{ display:inline; padding:0; border:0; border-radius:0; background:transparent; font-size:11px; font-weight:700; line-height:1.4; white-space:normal; }}
-    .pill.critical,.pill.open {{ color:#A33A32; }}
-    .pill.normal,.pill.resolved {{ color:#176B48; }}
-    .pill.unspecified,.pill.not-required {{ color:#8A5B18; }}
-    .footer {{ padding:16px 24px; border-top:1px solid #E3E5E0; background:#F5F6F3; color:#64716A; text-align:left; font-size:10px; }}
-    .footer strong {{ display:block; margin-bottom:3px; color:#25332B; font-size:12px; }}
-    .window-note {{ margin:0 0 14px; padding:9px 11px; border-left:3px solid #8A5B18; background:#FBF6EA; color:#6F511C; font-size:11px; }}
-    @media only screen and (max-width:640px) {{
-      body {{ padding:0 !important; }} .report {{ width:100% !important; max-width:none !important; border:0 !important; }}
-      .hero {{ padding:18px 14px !important; }} .content {{ padding:15px 12px !important; }} h1 {{ margin-top:16px; font-size:21px; }}
-      .logo {{ width:100px; }} .window {{ font-size:10px; }} .section-heading {{ align-items:flex-start; }}
-      .summary-table {{ display:block; width:100% !important; min-width:0 !important; }} .summary-table thead {{ display:none; }}
-      .summary-table tbody, .summary-table tr {{ display:block; width:100%; }} .summary-table tr {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }}
-      .summary-table td {{ display:flex; flex-direction:column; align-items:flex-start; gap:4px; padding:8px !important; text-align:left !important; font-size:15px !important; }}
-      .summary-table td::before {{ content:attr(data-label); color:#526158; font-size:9px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; }}
-      .table-shell {{ overflow:visible !important; border:0 !important; }} .scroll {{ overflow:visible !important; }}
-      .issue-table {{ display:block; width:100% !important; min-width:0 !important; table-layout:auto !important; }}
-      .issue-table thead {{ display:none; }} .issue-table tbody {{ display:block; width:100%; }}
-      .issue-table tbody tr {{ display:block; margin:0 0 11px; border:1px solid #D7DDD8; }}
-      .issue-table tbody td {{ display:grid; grid-template-columns:minmax(84px,30%) minmax(0,1fr); gap:8px; width:100%; padding:8px !important; font-size:12px !important; }}
-      .issue-table tbody td::before {{ content:attr(data-label); color:#526158; font-size:9px; font-weight:700; letter-spacing:.25px; text-transform:uppercase; }}
-      .client-cell strong {{ font-size:12px; }} .issue-cell strong {{ font-size:12px; }} .pill {{ font-size:12px; }}
-      .footer {{ padding:13px 14px !important; }}
-    }}
+    body {{ margin:0; padding:12px; background:#edf2ee; color:#18241d; font:15px/1.5 Arial,Helvetica,sans-serif; }}
+    .report {{ width:100%; max-width:620px; margin:0 auto; overflow:hidden; border:1px solid #d5dfd7; border-radius:12px; background:#fff; }}
+    .hero {{ padding:18px 18px 16px; color:#fff; background:#12382b; }}
+    .logo {{ width:106px; height:32px; display:block; }} .tagline {{ margin-top:2px; color:#c4d7cb; font-size:11px; }}
+    h1 {{ margin:16px 0 4px; font-size:22px; line-height:1.2; }} .subhead {{ margin:0; color:#d4e0d9; font-size:13px; }}
+    .window {{ display:block; margin-top:10px; color:#d4e0d9; font-size:12px; }}
+    .content {{ padding:16px; }} .summary {{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }}
+    .stat {{ flex:1 1 30%; min-width:90px; padding:10px; border:1px solid #dce5de; border-radius:8px; background:#f2f7f3; }}
+    .stat b {{ display:block; font-size:20px; line-height:1.2; }} .stat span {{ color:#52635a; font-size:11px; }}
+    h2 {{ margin:0 0 10px; color:#25392d; font-size:16px; }} .section-note {{ margin:-5px 0 12px; color:#56675d; font-size:12px; }}
+    .issue-card {{ margin-bottom:12px; border:1px solid #d8e1da; border-radius:9px; overflow:hidden; background:#fff; }}
+    .issue-card:nth-child(even) {{ background:#f4f8f5; }} .card-top {{ display:flex; justify-content:space-between; gap:10px; padding:12px; background:#e9f1eb; border-bottom:1px solid #d8e1da; }}
+    .issue-card:nth-child(even) .card-top {{ background:#e2ece5; }} .client {{ color:#183e2d; font-size:15px; font-weight:700; }}
+    .vehicle {{ margin-top:2px; color:#4f6257; font-size:12px; }} .badges {{ display:flex; align-items:flex-start; justify-content:flex-end; flex-wrap:wrap; gap:5px; }}
+    .pill {{ display:inline-block; padding:3px 7px; border-radius:12px; background:#e9eeee; color:#26362d; font-size:11px; font-weight:700; white-space:nowrap; }}
+    .pill.critical,.pill.open {{ background:#fde8e6; color:#982f27; }} .pill.normal,.pill.resolved {{ background:#e1f2e8; color:#17643d; }} .pill.unspecified,.pill.not-required {{ background:#f8f0d8; color:#765514; }}
+    .card-body {{ padding:4px 12px 10px; }} .field {{ padding:8px 0; border-bottom:1px solid #e8ede9; overflow-wrap:anywhere; }} .field:last-child {{ border:0; }}
+    .label {{ display:block; margin-bottom:2px; color:#53665a; font-size:10px; font-weight:700; letter-spacing:.35px; text-transform:uppercase; }}
+    .field strong {{ color:#18241d; }} .window-note {{ margin:0 0 12px; padding:9px; border-left:3px solid #966a13; background:#faf4e3; color:#684e19; font-size:12px; }}
+    .empty {{ padding:16px; border:1px solid #d8e1da; border-radius:8px; background:#f4f8f5; color:#45574b; }}
+    .footer {{ padding:13px 16px; border-top:1px solid #d8e1da; background:#f1f5f2; color:#52635a; font-size:11px; }}
+    .footer strong {{ display:block; color:#203b2c; font-size:13px; }}
     @media (prefers-color-scheme:dark) {{
-      body {{ background:#111827 !important; color:#E5E7EB !important; }} .report {{ background:#1F2937 !important; border-color:#374151 !important; }}
-      .hero {{ background:#111827 !important; }} .subhead {{ color:#D1D5DB !important; }} .window {{ color:#BBF7D0 !important; }}
-      h2,.client-cell strong,.issue-cell strong {{ color:#F9FAFB !important; }} .section-note,.vehicle-cell,.detail {{ color:#CBD5E1 !important; }}
-      .summary-table th {{ background:#273548 !important; color:#F3F4F6 !important; border-color:#4B5563 !important; }}
-      .summary-table th:nth-child(even),.summary-table td:nth-child(even),.summary-table td {{ background:#1F2937 !important; color:#F9FAFB !important; border-color:#4B5563 !important; }}
-      .summary-table td.critical {{ color:#FCA5A5 !important; }} .summary-table td.normal {{ color:#86EFAC !important; }} .summary-table td.unknown {{ color:#FDE68A !important; }}
-      .issue-table th {{ background:#273548 !important; color:#F3F4F6 !important; border-color:#4B5563 !important; }}
-      .issue-table tbody tr:nth-child(odd) td {{ background:#1F2937 !important; color:#E5E7EB !important; border-color:#374151 !important; }}
-      .issue-table tbody tr:nth-child(odd) td:nth-child(even) {{ background:#273444 !important; }}
-      .issue-table tbody tr:nth-child(even) td {{ background:#263343 !important; color:#E5E7EB !important; border-color:#374151 !important; }}
-      .issue-table tbody tr:nth-child(even) td:nth-child(even) {{ background:#2D3B4B !important; }}
-      .issue-table tbody td::before,.summary-table td::before {{ color:#C4D2CA !important; }}
-      .pill.critical,.pill.open {{ color:#FCA5A5 !important; }} .pill.normal,.pill.resolved {{ color:#86EFAC !important; }}
-      .pill.unspecified,.pill.not-required {{ color:#FDE68A !important; }}
-      .window-note {{ background:#3B3321 !important; color:#FDE68A !important; border-color:#FBBF24 !important; }}
-      .footer {{ background:#111827 !important; color:#CBD5E1 !important; border-color:#374151 !important; }} .footer strong {{ color:#F9FAFB !important; }}
+      body {{ background:#111a15 !important; color:#edf5ef !important; }} .report,.issue-card {{ background:#1c2921 !important; border-color:#45564a !important; }}
+      .content {{ background:#1c2921 !important; }} h2,.client,.field strong {{ color:#f1f7f2 !important; }} .section-note,.vehicle,.label {{ color:#c2d2c7 !important; }}
+      .stat,.issue-card:nth-child(even) {{ background:#24342a !important; border-color:#45564a !important; }} .stat span {{ color:#d0ddd4 !important; }}
+      .card-top,.issue-card:nth-child(even) .card-top {{ background:#2b4032 !important; border-color:#45564a !important; }}
+      .field {{ border-color:#3d4c41 !important; }} .pill.critical,.pill.open {{ background:#542e2c !important; color:#ffb4ad !important; }}
+      .pill.normal,.pill.resolved {{ background:#244a34 !important; color:#a8efbf !important; }} .pill.unspecified,.pill.not-required {{ background:#4a4028 !important; color:#ffe39a !important; }}
+      .window-note {{ background:#3c3421 !important; color:#ffe39a !important; }} .empty {{ background:#24342a !important; color:#e3eee6 !important; }}
+      .footer {{ background:#17221b !important; color:#d0ddd4 !important; border-color:#45564a !important; }} .footer strong {{ color:#f1f7f2 !important; }}
     }}
-    [data-ogsc] .report {{ background:#1F2937 !important; color:#E5E7EB !important; }}
-    [data-ogsc] .issue-table tbody td {{ color:#E5E7EB !important; border-color:#374151 !important; }}
-    [data-ogsc] .issue-table tbody tr:nth-child(odd) td {{ background:#1F2937 !important; }}
-    [data-ogsc] .issue-table tbody tr:nth-child(odd) td:nth-child(even) {{ background:#273444 !important; }}
-    [data-ogsc] .issue-table tbody tr:nth-child(even) td {{ background:#263343 !important; }}
-    [data-ogsc] .summary-table th {{ background:#273548 !important; color:#F3F4F6 !important; }}
-    [data-ogsc] .summary-table td {{ background:#1F2937 !important; color:#F9FAFB !important; }}
-    [data-ogsc] .pill.critical,[data-ogsc] .pill.open {{ color:#FCA5A5 !important; }}
-    [data-ogsc] .pill.normal,[data-ogsc] .pill.resolved {{ color:#86EFAC !important; }}
-    [data-ogsc] .pill.unspecified,[data-ogsc] .pill.not-required {{ color:#FDE68A !important; }}
+    [data-ogsc] .report,[data-ogsc] .issue-card {{ background:#1c2921 !important; color:#edf5ef !important; }}
+    [data-ogsc] .field strong,[data-ogsc] .client {{ color:#f1f7f2 !important; }}
   </style>
 </head>
 <body>
@@ -251,24 +191,15 @@ document = f"""<!DOCTYPE html>
         <div class="section-note">Daily operations</div>
       </div>
       <h1>Daily fleet issue report</h1>
-      <p class="subhead">Read-only summary of reported fleet issues and footage requests</p>
+      <p class="subhead">Customer requested footage only</p>
       <div class="window">{START.strftime("%d %b %Y, %I:%M %p IST")} <span aria-hidden="true">&rarr;</span> {END.strftime("%d %b %Y, %I:%M %p IST")}</div>
     </header>
     <div class="content">
-      <div class="section-heading"><h2>Daily summary</h2><span class="section-note">{clients} clients &bull; {total} issues</span></div>
-      <table class="summary-table" aria-label="Daily issue counts">
-        <thead><tr><th>Total</th><th>Critical</th><th>No critical</th><th>Not specified</th><th>Resolved</th><th>Not resolved</th><th>Not required</th><th>Resolution unstated</th></tr></thead>
-        <tbody><tr><td data-label="Total">{total}</td><td data-label="Critical" class="critical">{counts['critical']}</td><td data-label="No critical" class="normal">{counts['no_critical']}</td><td data-label="Not specified" class="unknown">{counts['priority_unknown']}</td><td data-label="Resolved" class="normal">{counts['resolved']}</td><td data-label="Not resolved" class="critical">{counts['not_resolved']}</td><td data-label="Not required">{counts['not_required']}</td><td data-label="Resolution unstated" class="unknown">{counts['resolution_unknown']}</td></tr></tbody>
-      </table>
+      <h2>Daily summary</h2><p class="section-note">{clients} clients &bull; {total} footage requests</p>
+      <div class="summary"><div class="stat"><b>{total}</b><span>Requests</span></div><div class="stat"><b>{counts['critical']}</b><span>Critical</span></div><div class="stat"><b>{counts['resolved']}</b><span>Resolved</span></div><div class="stat"><b>{counts['not_resolved']}</b><span>Not resolved</span></div></div>
       {window_note}
-      <div class="section-heading"><h2>All reported issues</h2><span class="section-note">Critical issues shown first</span></div>
-      <div class="table-shell"><div class="scroll">
-        <table class="issue-table" aria-label="Daily issue details">
-          <colgroup><col class="client"><col class="vehicle"><col class="priority"><col class="issue"><col class="remarks"><col class="resolved"><col class="status"></colgroup>
-          <thead><tr><th>Client</th><th>Vehicle</th><th>Criticality</th><th>Issue / request</th><th>Incident remarks</th><th>Resolved?</th><th>Current status</th></tr></thead>
-          <tbody>{''.join(rows)}</tbody>
-        </table>
-      </div></div>
+      <h2>Customer requested footage</h2><p class="section-note">Critical requests are listed first.</p>
+      {''.join(cards) if cards else '<div class="empty">No customer footage requests were recorded in this 9 AM to 9 AM reporting window.</div>'}
     </div>
     <footer class="footer"><strong>Let's Make Roads Safer, Together</strong>Issues- Realtime &bull; Read-only extract &bull; {total} matching records</footer>
   </main>
@@ -276,7 +207,7 @@ document = f"""<!DOCTYPE html>
 </html>"""
 
 OUTPUT.write_text(document, encoding="utf-8")
-print(f"wrote {OUTPUT}; issues={total}; clients={clients}; critical={counts['critical']}; no_critical={counts['no_critical']}; priority_unspecified={counts['priority_unknown']}; resolved={counts['resolved']}; not_resolved={counts['not_resolved']}; not_required={counts['not_required']}; resolution_not_stated={counts['resolution_unknown']}")
+print(f"wrote {OUTPUT}; footage_requests={total}; clients={clients}; critical={counts['critical']}; no_critical={counts['no_critical']}; priority_unspecified={counts['priority_unknown']}; resolved={counts['resolved']}; not_resolved={counts['not_resolved']}; not_required={counts['not_required']}; resolution_not_stated={counts['resolution_unknown']}")
 
 # Send the single consolidated report only to an explicitly configured address.
 required = ("REPORT_TO", "MAIL_HOST", "MAIL_PORT", "MAIL_USERNAME", "MAIL_PASSWORD", "MAIL_FROM")
