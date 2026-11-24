@@ -1,0 +1,43 @@
+name: Daily fleet issue report
+
+on:
+  schedule:
+    - cron: '0 21 * * *'
+      timezone: Asia/Kolkata
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-fleet-issue-report
+  cancel-in-progress: false
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out report automation
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download read-only sheet export
+        env:
+          SHEET_CSV_URL: https://docs.google.com/spreadsheets/d/1DzW-6Q7hTNn2hSJbEHOkSrbalOmbDIftdjw4I_PhEdA/export?format=csv&gid=0
+        run: |
+          curl --fail --location --silent --show-error --retry 3 --retry-all-errors "$SHEET_CSV_URL" --output issues.csv
+          python -c "import csv; f=open('issues.csv', encoding='utf-8-sig', newline=''); h=next(csv.reader(f)); assert 'Timestamp Issues Raised' in h, 'Sheet export did not contain expected issue columns'"
+      - name: Build and email one combined report
+        env:
+          ISSUES_CSV: issues.csv
+          REPORT_HTML: daily-report.html
+          REPORT_TO: ${{ secrets.REPORT_TO }}
+          MAIL_HOST: ${{ secrets.MAIL_HOST }}
+          MAIL_PORT: ${{ secrets.MAIL_PORT }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+        run: python automation/daily_issue_report.py
