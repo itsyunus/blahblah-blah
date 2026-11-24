@@ -19,16 +19,62 @@ START = END - dt.timedelta(days=1)
 def esc(value):
     return html.escape((value or "").replace("\r", " ").replace("\n", " ").strip())
 
+def parse_raised_timestamp(value, row_number):
+    raw = (value or "").replace("\u00a0", " ").strip()
+    if not raw:
+        return None, False
+
+    full_formats = (
+        "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M:%S.%f", "%d/%m/%Y %H:%M", "%d/%m/%Y, %H:%M:%S",
+        "%d/%m/%Y %I:%M:%S %p", "%d/%m/%Y, %I:%M:%S %p",
+        "%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M:%S.%f", "%m/%d/%Y %H:%M",
+        "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f",
+    )
+    parsed = None
+    for timestamp_format in full_formats:
+        try:
+            parsed = dt.datetime.strptime(raw, timestamp_format)
+            break
+        except ValueError:
+            continue
+
+    if parsed is None:
+        try:
+            parsed = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if parsed.time() == dt.time.min and len(raw) <= 10:
+                return parsed.replace(tzinfo=TZ), True
+        except ValueError:
+            pass
+
+    if parsed is not None:
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=TZ)
+        else:
+            parsed = parsed.astimezone(TZ)
+        return parsed, False
+
+    for date_format in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            parsed_date = dt.datetime.strptime(raw, date_format).date()
+            return dt.datetime.combine(parsed_date, dt.time.min, TZ), True
+        except ValueError:
+            continue
+
+    raise SystemExit(f"Unrecognized timestamp format on CSV row {row_number}: {raw!r}; refusing to email a possibly incomplete report")
+
 issues = []
 with SOURCE.open(encoding="utf-8-sig", newline="") as f:
-    for source_row in csv.DictReader(f):
-        try:
-            raised = dt.datetime.strptime(source_row.get("Timestamp Issues Raised", "").strip(), "%d/%m/%Y %H:%M:%S").replace(tzinfo=TZ)
-        except ValueError:
-            if (source_row.get("Timestamp Issues Raised") or "").strip():
-                raise SystemExit("Unrecognized timestamp format in source CSV; refusing to email a possibly incomplete report")
+    for row_number, source_row in enumerate(csv.DictReader(f), start=2):
+        raised, date_only = parse_raised_timestamp(source_row.get("Timestamp Issues Raised"), row_number)
+        if raised is None:
             continue
-        if not (START <= raised < END):
+        if date_only:
+            # Date-only records cannot be placed precisely across the 9 AM boundary.
+            # Keep them visible for either calendar date covered by the window and disclose the uncertainty.
+            in_window = START.date() <= raised.date() <= END.date()
+        else:
+            in_window = START <= raised < END
+        if not in_window:
             continue
         incident = (source_row.get("Incident Type") or "").strip()
         issues.append({
@@ -40,6 +86,7 @@ with SOURCE.open(encoding="utf-8-sig", newline="") as f:
             "remarks": (source_row.get("Remarks (Incident Details)") or "").strip() or "No incident remarks recorded",
             "resolved": (source_row.get("Resolved Y/N") or "").strip() or "Not stated",
             "status": (source_row.get("Date - Current Status") or "").strip() or "No current status recorded",
+            "time_uncertain": date_only,
         })
 
 priority_order = {"Critical": 0, "No critical": 1, "Not specified": 2}
@@ -73,6 +120,11 @@ for item in issues:
     </tr>""")
 
 clients = len({x["client"] for x in issues})
+date_only_count = sum(item["time_uncertain"] for item in issues)
+window_note = (
+    f'<p class="window-note">{date_only_count} record(s) have a date but no time. They are included by calendar date; their exact position around the 9 AM boundary cannot be confirmed.</p>'
+    if date_only_count else ""
+)
 document = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -122,6 +174,7 @@ document = f"""<!DOCTYPE html>
     .pill.unspecified,.pill.not-required {{ color:#8A5B18; }}
     .footer {{ padding:16px 24px; border-top:1px solid #E3E5E0; background:#F5F6F3; color:#64716A; text-align:left; font-size:10px; }}
     .footer strong {{ display:block; margin-bottom:3px; color:#25332B; font-size:12px; }}
+    .window-note {{ margin:0 0 14px; padding:9px 11px; border-left:3px solid #8A5B18; background:#FBF6EA; color:#6F511C; font-size:11px; }}
     @media(max-width:720px) {{ body {{ padding:0; }} .report {{ border-radius:0; }} .hero {{ padding:22px 18px; }} .content {{ padding:20px 14px; }} .summary-grid {{ grid-template-columns:repeat(2,1fr); }} .report-tag {{ font-size:8px; }} .window {{ font-size:9px; }} }}
   </style>
 </head>
@@ -160,6 +213,7 @@ document = f"""<!DOCTYPE html>
         <span class="res-item">{counts['not_required']} not required</span>
         <span class="res-item">{counts['resolution_unknown']} not stated</span>
       </div>
+      {window_note}
       <div class="section-heading"><h2>All reported issues</h2><span class="section-note">Critical issues shown first</span></div>
       <div class="table-shell"><div class="scroll">
         <table aria-label="Daily issue details">
