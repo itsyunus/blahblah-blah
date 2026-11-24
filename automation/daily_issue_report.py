@@ -111,7 +111,8 @@ for item in issues:
     r_class = {"yes": "resolved", "no": "open", "not required": "not-required"}.get(item["resolved"].lower(), "unspecified")
     issue = f'<strong>{esc(item["request"])}</strong><span class="detail">{esc(item["details"])}</span>'
     rows.append(f"""<tr>
-      <td class="client-cell"><strong>{esc(item['client'])}</strong><span class="vehicle">{esc(item['vehicle'])}</span></td>
+      <td class="client-cell"><strong>{esc(item['client'])}</strong></td>
+      <td class="vehicle-cell">{esc(item['vehicle'])}</td>
       <td>{badge(item['priority'], p_class)}</td>
       <td class="issue-cell">{issue}</td>
       <td>{esc(item['remarks'])}</td>
@@ -157,16 +158,18 @@ document = f"""<!DOCTYPE html>
     .metric.critical .metric-value {{ color:#A33A32; }}
     .metric.normal .metric-value {{ color:#176B48; }}
     .metric.unknown .metric-value {{ color:#8A5B18; }}
-    .resolution {{ display:flex; align-items:center; flex-wrap:wrap; gap:8px 18px; margin:12px 0 23px; padding:10px 0; border-bottom:1px solid #E5E8E3; color:#475569; font-size:11px; }}
-    .resolution strong {{ color:#0F172A; margin-right:4px; }} .res-item {{ display:inline-flex; align-items:center; gap:6px; }}
+    .summary-table {{ width:100%; min-width:0; margin:0 0 22px; border-collapse:collapse; table-layout:auto; }}
+    .summary-table th {{ padding:8px 7px; border:1px solid #D7DDD8; background:#F5F6F3; color:#526158; text-align:center; font-size:9px; font-weight:700; letter-spacing:.25px; text-transform:uppercase; }}
+    .summary-table td {{ padding:9px 7px; border:1px solid #D7DDD8; color:#0F172A; text-align:center; font-size:14px; font-weight:700; }}
+    .summary-table td.critical {{ color:#A33A32; }} .summary-table td.normal {{ color:#176B48; }} .summary-table td.unknown {{ color:#8A5B18; }}
     .table-shell {{ overflow:hidden; border-top:1px solid #D7DDD8; border-bottom:1px solid #D7DDD8; }}
     .scroll {{ overflow-x:auto; }}
     table {{ width:100%; min-width:920px; border-collapse:collapse; table-layout:fixed; }}
-    col.client {{ width:16%; }} col.priority {{ width:11%; }} col.issue {{ width:24%; }} col.remarks {{ width:20%; }} col.resolved {{ width:10%; }} col.status {{ width:19%; }}
+    col.client {{ width:15%; }} col.vehicle {{ width:10%; }} col.priority {{ width:10%; }} col.issue {{ width:22%; }} col.remarks {{ width:18%; }} col.resolved {{ width:10%; }} col.status {{ width:15%; }}
     thead {{ background:#F5F6F3; }} th {{ padding:10px 11px; border-bottom:1px solid #D7DDD8; color:#526158; text-align:left; font-size:9px; font-weight:700; letter-spacing:.45px; text-transform:uppercase; }}
     td {{ padding:10px 11px; border-bottom:1px solid #E7EAE6; color:#334155; vertical-align:top; font-size:11px; line-height:1.45; overflow-wrap:anywhere; }}
     tbody tr:nth-child(even) {{ background:#FAFBF9; }} tbody tr:last-child td {{ border-bottom:0; }}
-    .client-cell strong {{ display:block; color:#0F172A; font-size:11px; }} .vehicle {{ display:block; margin-top:3px; color:#64748B; font:10px ui-monospace,SFMono-Regular,Menlo,monospace; }}
+    .client-cell strong {{ display:block; color:#0F172A; font-size:11px; }} .vehicle-cell {{ color:#64748B; font:10px ui-monospace,SFMono-Regular,Menlo,monospace; }}
     .issue-cell strong {{ display:block; color:#0F172A; font-weight:700; }} .detail {{ display:block; margin-top:3px; color:#475569; }}
     .pill {{ display:inline; padding:0; border:0; border-radius:0; background:transparent; font-size:11px; font-weight:700; line-height:1.4; white-space:normal; }}
     .pill.critical,.pill.open {{ color:#A33A32; }}
@@ -199,26 +202,17 @@ document = f"""<!DOCTYPE html>
       <div class="window">{START.strftime("%d %b %Y, %I:%M %p IST")} <span aria-hidden="true">&rarr;</span> {END.strftime("%d %b %Y, %I:%M %p IST")}</div>
     </header>
     <div class="content">
-      <div class="section-heading"><h2>Executive summary</h2><span class="section-note">{clients} clients &bull; {total} issues</span></div>
-      <section class="summary-grid" aria-label="Issue summary">
-        <div class="metric"><div class="metric-label">Total issues</div><div class="metric-value">{total}</div><div class="metric-hint">In this reporting window</div></div>
-        <div class="metric critical"><div class="metric-label">Critical</div><div class="metric-value">{counts['critical']}</div><div class="metric-hint">Marked critical in the tracker</div></div>
-        <div class="metric normal"><div class="metric-label">No critical</div><div class="metric-value">{counts['no_critical']}</div><div class="metric-hint">Marked normal in the tracker</div></div>
-        <div class="metric unknown"><div class="metric-label">Not specified</div><div class="metric-value">{counts['priority_unknown']}</div><div class="metric-hint">Incident type not entered</div></div>
-      </section>
-      <div class="resolution" aria-label="Resolution summary">
-        <strong>Resolution</strong>
-        <span class="res-item">{counts['resolved']} resolved</span>
-        <span class="res-item">{counts['not_resolved']} not resolved</span>
-        <span class="res-item">{counts['not_required']} not required</span>
-        <span class="res-item">{counts['resolution_unknown']} not stated</span>
-      </div>
+      <div class="section-heading"><h2>Daily summary</h2><span class="section-note">{clients} clients &bull; {total} issues</span></div>
+      <table class="summary-table" aria-label="Daily issue counts">
+        <thead><tr><th>Total</th><th>Critical</th><th>No critical</th><th>Not specified</th><th>Resolved</th><th>Not resolved</th><th>Not required</th><th>Resolution unstated</th></tr></thead>
+        <tbody><tr><td>{total}</td><td class="critical">{counts['critical']}</td><td class="normal">{counts['no_critical']}</td><td class="unknown">{counts['priority_unknown']}</td><td class="normal">{counts['resolved']}</td><td class="critical">{counts['not_resolved']}</td><td>{counts['not_required']}</td><td class="unknown">{counts['resolution_unknown']}</td></tr></tbody>
+      </table>
       {window_note}
       <div class="section-heading"><h2>All reported issues</h2><span class="section-note">Critical issues shown first</span></div>
       <div class="table-shell"><div class="scroll">
         <table aria-label="Daily issue details">
-          <colgroup><col class="client"><col class="priority"><col class="issue"><col class="remarks"><col class="resolved"><col class="status"></colgroup>
-          <thead><tr><th>Client / vehicle</th><th>Criticality</th><th>Issue / request</th><th>Incident remarks</th><th>Resolved?</th><th>Current status</th></tr></thead>
+          <colgroup><col class="client"><col class="vehicle"><col class="priority"><col class="issue"><col class="remarks"><col class="resolved"><col class="status"></colgroup>
+          <thead><tr><th>Client</th><th>Vehicle</th><th>Criticality</th><th>Issue / request</th><th>Incident remarks</th><th>Resolved?</th><th>Current status</th></tr></thead>
           <tbody>{''.join(rows)}</tbody>
         </table>
       </div></div>
