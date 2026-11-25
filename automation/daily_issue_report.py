@@ -100,38 +100,62 @@ critical = sum(item["priority"] == "Critical" for item in issues)
 resolved = sum(item["resolved"].casefold() == "yes" for item in issues)
 not_resolved = sum(item["resolved"].casefold() == "no" for item in issues)
 
-def pill(label, kind):
-    return f'<span class="pill {kind}">{esc(label)}</span>'
+from collections import Counter, defaultdict
 
-cards = []
+pending = not_resolved
+other = total - resolved - pending
+rate = f"{resolved / total:.0%}" if total else "0%"
+clients = defaultdict(Counter)
 for item in issues:
-    p_class = {"Critical": "critical", "No critical": "normal", "Not specified": "unknown"}[item["priority"]]
-    r_class = {"yes": "resolved", "no": "open"}.get(item["resolved"].casefold(), "unknown")
-    cards.append(f"""<article class="issue-card">
-      <header class="card-head"><div><strong>{esc(item['client'])}</strong><span>Vehicle {esc(item['vehicle'])}</span></div>
-        <div class="pills">{pill(item['priority'], p_class)}{pill(item['resolved'], r_class)}</div></header>
-      <div class="card-content"><div class="field"><b>Customer footage request</b><strong>{esc(item['request'])}</strong></div>
-        <div class="field"><b>Issue details</b><span>{esc(item['details'])}</span></div>
-        <div class="field"><b>Remarks</b><span>{esc(item['remarks'])}</span></div>
-        <div class="field"><b>Current status</b><span>{esc(item['status'])}</span></div></div>
-    </article>""")
+    key = item["resolved"].casefold()
+    clients[item["client"]]["completed" if key == "yes" else "pending" if key == "no" else "other"] += 1
 
-no_rows = '<div class="empty">No customer requested footage was raised during this 9 AM–9 AM window.</div>'
-date_note = f'<p class="note">{date_only_or_missing} row(s) had no usable timestamp and could not be placed in the 9 AM–9 AM window.</p>' if date_only_or_missing else ""
-document = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>Cautio | Customer Footage Report</title>
-<style>
-*{{box-sizing:border-box}}body{{margin:0;padding:8px;background:#edf2ee;color:#18241d;font:14px/1.35 Arial,Helvetica,sans-serif}}.report{{max-width:600px;margin:0 auto;background:#fff;border:1px solid #d5dfd7;border-radius:10px;overflow:hidden}}
-.hero{{padding:12px 15px;background:#12382b;color:#fff}}.logo{{display:block;width:86px;height:26px}}.tagline{{color:#c4d7cb;font-size:10px}}h1{{font-size:18px;line-height:1.15;margin:9px 0 3px}}.subtitle,.window{{color:#d4e0d9;font-size:11px;margin:0}}.window{{margin-top:5px}}
-.content{{padding:10px}}.summary{{display:flex;gap:5px;margin:0 0 9px}}.stat{{flex:1;padding:6px 7px;border:1px solid #dce5de;border-radius:6px;background:#f2f7f3}}.stat b{{display:inline;font-size:15px;margin-right:3px}}.stat span{{color:#52635a;font-size:10px}}
-.issue-card{{margin-bottom:7px;border:1px solid #d8e1da;border-radius:7px;overflow:hidden;background:#fff}}.issue-card:nth-child(even){{background:#f4f8f5}}.card-head{{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:7px 9px;background:#e9f1eb;border-bottom:1px solid #d8e1da}}.issue-card:nth-child(even) .card-head{{background:#e2ece5}}.card-head strong{{display:block;color:#183e2d;font-size:12px}}.card-head span{{display:block;margin-top:1px;color:#4f6257;font-size:10px}}.pills{{display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end}}.pill{{display:inline-block;padding:2px 6px;border-radius:10px;background:#e9eeee;color:#26362d;font-size:9px;font-weight:bold;white-space:nowrap}}.pill.critical,.pill.open{{background:#fde8e6;color:#982f27}}.pill.normal,.pill.resolved{{background:#e1f2e8;color:#17643d}}.pill.unknown{{background:#f8f0d8;color:#765514}}
-.card-content{{padding:2px 9px 4px}}.field{{display:grid;grid-template-columns:88px minmax(0,1fr);gap:5px;padding:4px 0;border-bottom:1px solid #e8ede9;overflow-wrap:anywhere}}.field:last-child{{border:0}}.field b{{display:block;color:#53665a;font-size:8px;letter-spacing:.25px;text-transform:uppercase}}.field strong,.field span{{font-size:11px;color:#18241d}}.empty{{padding:10px;border:1px solid #d8e1da;border-radius:7px;background:#f4f8f5;color:#45574b}}.note{{margin:0 0 7px;padding:6px;border-left:3px solid #966a13;background:#faf4e3;color:#684e19;font-size:10px}}.footer{{padding:9px 12px;background:#f1f5f2;border-top:1px solid #d8e1da;color:#52635a;font-size:10px}}.footer strong{{display:inline;color:#203b2c;font-size:11px;margin-right:4px}}
-@media(max-width:420px){{body{{padding:4px}}.hero{{padding:10px 12px}}.content{{padding:7px}}.field{{grid-template-columns:75px minmax(0,1fr);gap:4px;padding:3px 0}}.field span,.field strong{{font-size:10px}}.stat{{padding:5px}}}}
-@media(prefers-color-scheme:dark){{body{{background:#111a15!important;color:#edf5ef!important}}.report,.issue-card{{background:#1c2921!important;border-color:#45564a!important}}.content{{background:#1c2921!important}}.stat,.issue-card:nth-child(even){{background:#24342a!important;border-color:#45564a!important}}.stat span,.card-head span,.field b{{color:#c2d2c7!important}}.stat b,.card-head strong,.field strong{{color:#f1f7f2!important}}.card-head,.issue-card:nth-child(even) .card-head{{background:#2b4032!important;border-color:#45564a!important}}.field{{border-color:#3d4c41!important}}.pill.critical,.pill.open{{background:#542e2c!important;color:#ffb4ad!important}}.pill.normal,.pill.resolved{{background:#244a34!important;color:#a8efbf!important}}.pill.unknown{{background:#4a4028!important;color:#ffe39a!important}}.empty{{background:#24342a!important;color:#e3eee6!important}}.note{{background:#3c3421!important;color:#ffe39a!important}}.footer{{background:#17221b!important;color:#d0ddd4!important;border-color:#45564a!important}}.footer strong{{color:#f1f7f2!important}}}}
-</style></head><body><main class="report"><header class="hero"><svg class="logo" viewBox="0 0 120 36" role="img" aria-label="Cautio logo" xmlns="http://www.w3.org/2000/svg"><text x="0" y="28" fill="#FFFFFF" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" letter-spacing="-1">cautio</text><circle cx="56.3" cy="6.8" r="2.5" fill="#34D399"/></svg>
-<div class="tagline">The future of safety on every journey</div><h1>Customer footage report</h1><p class="subtitle">Customer requested footage only · AI camera events excluded</p><p class="window">{START.strftime('%d %b %Y, 9:00 AM')} – {END.strftime('%d %b %Y, 9:00 AM')} IST</p></header>
-<section class="content"><div class="summary"><div class="stat"><b>{total}</b><span>Requests</span></div><div class="stat"><b>{critical}</b><span>Critical</span></div><div class="stat"><b>{resolved}</b><span>Resolved</span></div><div class="stat"><b>{not_resolved}</b><span>Not resolved</span></div></div>{''.join(cards) if cards else no_rows}{date_note}</section>
-<footer class="footer"><strong>Let's Make Roads Safer, Together</strong>Read-only report from Issues- Realtime</footer></main></body></html>"""
+def cell(value, color="#263238", bg="#ffffff", weight="normal"):
+    return f'<td bgcolor="{bg}" style="background-color:{bg};color:{color};font-weight:{weight};padding:9px 7px;border-bottom:1px solid #e1e5e8;font-size:13px;line-height:1.5;vertical-align:top;overflow-wrap:anywhere;">{esc(value)}</td>'
+
+def kpi(label, value, color):
+    return f'<td width="50%" style="padding:4px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td bgcolor="#ffffff" align="center" style="background:#ffffff;border:1px solid #e1e5e8;border-radius:8px;padding:12px 5px;color:#263238"><span style="font-size:12px;color:#52616b">{esc(label)}</span><br><strong style="font-size:25px;color:{color}">{esc(str(value))}</strong></td></tr></table></td>'
+
+def bar(parts, denominator):
+    if not denominator:
+        return '<div style="background:#e3e7e9;height:12px;border-radius:4px"></div>'
+    segments = "".join(f'<td width="{n / denominator * 100:.4f}%" bgcolor="{color}" style="background-color:{color};height:14px;font-size:1px;line-height:14px;">&nbsp;</td>' for n, color in parts if n)
+    return f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="table-layout:fixed"><tr>{segments}</tr></table>'
+
+legend = f'<p style="font-size:12px;line-height:1.6;color:#263238;margin:8px 0 0"><strong style="color:#218838">Completed {resolved}</strong> &nbsp; <strong style="color:#b52e25">Pending {pending}</strong> &nbsp; Other {other}</p>'
+status_bar = bar([(resolved,"#32a83a"),(pending,"#c0392b"),(other,"#89939b")], total)
+client_rows = []
+maximum = max((sum(c.values()) for c in clients.values()), default=0)
+for name, c in sorted(clients.items(), key=lambda pair: (-sum(pair[1].values()), pair[0].casefold())):
+    n = sum(c.values())
+    chart = bar([(c["completed"],"#32a83a"),(c["pending"],"#c0392b"),(c["other"],"#89939b"),(maximum-n,"#e8ecee")], maximum)
+    client_rows.append(f'<tr><td style="padding:7px 0;border-bottom:1px solid #e8ecee;color:#263238;font-size:13px"><strong>{esc(name)}</strong><span style="font-size:12px"> &mdash; {n}</span><div style="padding-top:4px">{chart}</div><div style="font-size:11px;color:#52616b;padding-top:3px">Completed {c["completed"]} / Pending {c["pending"]} / Other {c["other"]}</div></td></tr>')
+client_chart = "".join(client_rows) or '<tr><td style="padding:8px;color:#52616b">No matching requests.</td></tr>'
+records = []
+for i, item in enumerate(issues):
+    bg = "#ffffff" if i % 2 == 0 else "#eef4ef"
+    priority_color = "#b52e25" if item["priority"] == "Critical" else "#263238"
+    key = item["resolved"].casefold()
+    resolution = "Completed" if key == "yes" else "Pending" if key == "no" else item["resolved"]
+    status_color = "#218838" if key == "yes" else "#b52e25" if key == "no" else "#52616b"
+    details = f'<strong>{esc(item["request"])}</strong><br>{esc(item["details"])}<br><strong>Remarks:</strong> {esc(item["remarks"])}<br><strong>Current status:</strong> {esc(item["status"])}'
+    records.append(f'<tr>{cell(item["client"] + " / " + item["vehicle"], bg=bg, weight="bold")}{cell(item["priority"], priority_color, bg, "bold")}<td bgcolor="{bg}" style="background:{bg};color:#263238;padding:9px 7px;font-size:13px;line-height:1.5;border-bottom:1px solid #e1e5e8;vertical-align:top;overflow-wrap:anywhere">{details}</td>{cell(resolution, status_color, bg, "bold")}</tr>')
+rows = "".join(records) or '<tr><td colspan="4" style="padding:16px;color:#52616b">No matching customer footage requests.</td></tr>'
+date_note = f'<p style="font-size:12px;color:#795717;background:#fff3d5;padding:8px">{date_only_or_missing} source row(s) with date-only timestamps could not be placed in the reporting window.</p>' if date_only_or_missing else ""
+window = f"{START:%d %b %Y}, 9:00 AM – {END:%d %b %Y}, 9:00 AM IST"
+document = f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>Cautio | Footage Request Dashboard</title></head>
+<body bgcolor="#f4f5f8" style="margin:0;padding:0;background:#f4f5f8;color:#263238;font-family:Arial,sans-serif">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#f4f5f8"><tr><td align="center" style="padding:8px">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%">
+<tr><td bgcolor="#32a83a" align="center" style="background:#32a83a;color:#ffffff;padding:18px 10px;border-radius:10px"><strong style="font-size:24px;letter-spacing:-1px;color:#ffffff">cautio</strong><h1 style="font-size:21px;margin:8px 0 5px;color:#ffffff">Footage Request Dashboard</h1><p style="font-size:13px;margin:0;color:#ffffff">Client-wise request monitoring and completion report</p><p style="font-size:12px;margin:7px 0 0;color:#ffffff">{window}</p></td></tr>
+<tr><td style="padding:10px 0"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="table-layout:fixed"><tr>{kpi("Total Requests",total,"#263238")}{kpi("Completed",resolved,"#218838")}</tr><tr>{kpi("Pending",pending,"#b52e25")}{kpi("Completion Rate",rate,"#263238")}</tr></table><p style="margin:4px 0 0;text-align:center;font-size:13px;color:#263238">Critical: <strong>{critical}</strong> &nbsp; | &nbsp; Other resolution: <strong>{other}</strong></p></td></tr>
+<tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #e1e5e8;border-radius:8px;padding:14px;color:#263238"><h2 style="margin:0 0 12px;text-align:center;font-size:16px;color:#263238">Completed vs Pending</h2>{status_bar}{legend}</td></tr>
+<tr><td style="height:10px;font-size:1px">&nbsp;</td></tr>
+<tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #e1e5e8;border-radius:8px;padding:14px;color:#263238"><h2 style="margin:0 0 6px;text-align:center;font-size:16px;color:#263238">Client-wise Requests</h2><table role="presentation" width="100%" cellspacing="0" cellpadding="0">{client_chart}</table></td></tr>
+<tr><td style="height:10px;font-size:1px">&nbsp;</td></tr>
+<tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #e1e5e8;border-radius:8px;padding:8px;color:#263238"><h2 style="margin:7px 0 12px;text-align:center;font-size:16px;color:#263238">Footage Request Details</h2><table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;table-layout:fixed;width:100%;overflow-wrap:anywhere"><thead><tr bgcolor="#32a83a" style="background:#32a83a;color:#ffffff"><th width="23%" style="padding:8px 4px;font-size:12px;color:#ffffff">Client / Vehicle</th><th width="17%" style="padding:8px 4px;font-size:12px;color:#ffffff">Priority</th><th width="40%" style="padding:8px 4px;font-size:12px;color:#ffffff">Incident Details</th><th width="20%" style="padding:8px 4px;font-size:12px;color:#ffffff">Status</th></tr></thead><tbody>{rows}</tbody></table>{date_note}</td></tr>
+<tr><td align="center" style="padding:12px 5px;font-size:11px;color:#52616b">Customer-requested footage only &bull; Read-only report from Issues- Realtime</td></tr>
+</table></td></tr></table></body></html>"""
 OUTPUT.write_text(document, encoding="utf-8")
 print(f"wrote {OUTPUT}; footage_requests={total}; critical={critical}; resolved={resolved}; not_resolved={not_resolved}")
 
