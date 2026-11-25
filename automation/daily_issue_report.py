@@ -11,7 +11,7 @@ SOURCE = Path(os.environ.get("ISSUES_CSV", "issues.csv"))
 OUTPUT = Path(os.environ.get("REPORT_HTML", "daily-report.html"))
 TZ = ZoneInfo("Asia/Kolkata")
 now = dt.datetime.now(TZ)
-END = now.replace(hour=9, minute=0, second=0, microsecond=0)
+END = now.replace(hour=21, minute=0, second=0, microsecond=0)
 if now < END:
     END -= dt.timedelta(days=1)
 START = END - dt.timedelta(days=1)
@@ -146,7 +146,7 @@ for item in issues:
 critical_rows = "".join(critical_records) or '<tr><td colspan="4" style="padding:16px;color:#b5c3ba">No critical footage requests in this reporting window.</td></tr>'
 rows = "".join(regular_records) or '<tr><td colspan="4" style="padding:16px;color:#b5c3ba">No other footage requests.</td></tr>'
 date_note = f'<p style="font-size:12px;color:#ffe1a1;background:#382f20;padding:8px">{date_only_or_missing} source row(s) with date-only timestamps could not be placed in the reporting window.</p>' if date_only_or_missing else ""
-window = f"{START:%d %b %Y}, 9:00 AM – {END:%d %b %Y}, 9:00 AM IST"
+window = f"{START:%d %b %Y}, 9:00 PM – {END:%d %b %Y}, 9:00 PM IST"
 document = f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark"><title>Cautio | Footage Request Dashboard</title></head>
 <body bgcolor="#0c120f" style="margin:0;padding:0;background:#0c120f;color:#eef3ef;font-family:Arial,sans-serif">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#0c120f"><tr><td align="center" style="padding:8px">
@@ -170,7 +170,7 @@ missing_mail = [name for name in required_mail if not os.environ.get(name)]
 if missing_mail:
     raise SystemExit("Email not configured; missing required GitHub secrets: " + ", ".join(missing_mail))
 message = EmailMessage()
-message["Subject"] = f"Cautio customer footage report | {START:%d %b} 9 AM–{END:%d %b} 9 AM IST"
+message["Subject"] = f"Cautio customer footage report | {START:%d %b} 9 PM–{END:%d %b} 9 PM IST"
 message["From"] = os.environ["MAIL_FROM"]
 message["To"] = os.environ["REPORT_TO"]
 message.set_content(f"{total} customer footage requests, {critical} critical, {resolved} resolved, {not_resolved} not resolved. Open in an HTML-capable mail app for the full report.")
