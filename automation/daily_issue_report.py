@@ -131,8 +131,11 @@ for name, c in sorted(clients.items(), key=lambda pair: (-sum(pair[1].values()),
     chart = bar([(c["completed"],"#79e3a0"),(c["pending"],"#f37870"),(c["other"],"#9baaa0"),(maximum-n,"#303c34")], maximum)
     client_rows.append(f'<tr><td style="padding:7px 0;border-bottom:1px solid #303c34;color:#eef3ef;font-size:13px"><strong>{esc(name)}</strong><span style="font-size:12px"> &mdash; {n}</span><div style="padding-top:4px">{chart}</div><div style="font-size:11px;color:#b5c3ba;padding-top:3px">Completed {c["completed"]} / Pending {c["pending"]} / Other {c["other"]}</div></td></tr>')
 client_chart = "".join(client_rows) or '<tr><td style="padding:8px;color:#b5c3ba">No matching requests.</td></tr>'
-records = []
-for i, item in enumerate(issues):
+critical_records = []
+regular_records = []
+for item in issues:
+    records = critical_records if item['priority'] == 'Critical' else regular_records
+    i = len(records)
     bg = "#141c18" if i % 2 == 0 else "#1e2922"
     priority_color = "#ffaaa3" if item["priority"] == "Critical" else "#eef3ef"
     key = item["resolved"].casefold()
@@ -140,7 +143,8 @@ for i, item in enumerate(issues):
     status_color = "#80e6a5" if key == "yes" else "#ffaaa3" if key == "no" else "#b5c3ba"
     details = f'<strong>{esc(item["request"])}</strong><br>{esc(item["details"])}<br><strong>Remarks:</strong> {esc(item["remarks"])}<br><strong>Current status:</strong> {esc(item["status"])}'
     records.append(f'<tr>{cell(item["client"] + " / " + item["vehicle"], bg=bg, weight="bold")}{cell(item["priority"], priority_color, bg, "bold")}<td bgcolor="{bg}" style="background:{bg};color:#eef3ef;padding:9px 7px;font-size:13px;line-height:1.5;border-bottom:1px solid #35433b;vertical-align:top;overflow-wrap:anywhere">{details}</td>{cell(resolution, status_color, bg, "bold")}</tr>')
-rows = "".join(records) or '<tr><td colspan="4" style="padding:16px;color:#b5c3ba">No matching customer footage requests.</td></tr>'
+critical_rows = "".join(critical_records) or '<tr><td colspan="4" style="padding:16px;color:#b5c3ba">No critical footage requests in this reporting window.</td></tr>'
+rows = "".join(regular_records) or '<tr><td colspan="4" style="padding:16px;color:#b5c3ba">No other footage requests.</td></tr>'
 date_note = f'<p style="font-size:12px;color:#ffe1a1;background:#382f20;padding:8px">{date_only_or_missing} source row(s) with date-only timestamps could not be placed in the reporting window.</p>' if date_only_or_missing else ""
 window = f"{START:%d %b %Y}, 9:00 AM – {END:%d %b %Y}, 9:00 AM IST"
 document = f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark"><title>Cautio | Footage Request Dashboard</title></head>
@@ -153,7 +157,9 @@ document = f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta 
 <tr><td style="height:10px;font-size:1px">&nbsp;</td></tr>
 <tr><td bgcolor="#141c18" style="background:#141c18;border:1px solid #35433b;border-radius:8px;padding:14px;color:#eef3ef"><h2 style="margin:0 0 6px;text-align:center;font-size:16px;color:#eef3ef">Client-wise Requests</h2><table role="presentation" width="100%" cellspacing="0" cellpadding="0">{client_chart}</table></td></tr>
 <tr><td style="height:10px;font-size:1px">&nbsp;</td></tr>
-<tr><td bgcolor="#141c18" style="background:#141c18;border:1px solid #35433b;border-radius:8px;padding:8px;color:#eef3ef"><h2 style="margin:7px 0 12px;text-align:center;font-size:16px;color:#eef3ef">Footage Request Details</h2><table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;table-layout:fixed;width:100%;overflow-wrap:anywhere"><thead><tr bgcolor="#79e3a0" style="background:#79e3a0;color:#141c18"><th width="23%" style="padding:8px 4px;font-size:12px;color:#141c18">Client / Vehicle</th><th width="17%" style="padding:8px 4px;font-size:12px;color:#141c18">Priority</th><th width="40%" style="padding:8px 4px;font-size:12px;color:#141c18">Incident Details</th><th width="20%" style="padding:8px 4px;font-size:12px;color:#141c18">Status</th></tr></thead><tbody>{rows}</tbody></table>{date_note}</td></tr>
+<tr><td bgcolor="#141c18" style="background:#141c18;border:1px solid #35433b;border-radius:8px;padding:8px;color:#eef3ef"><h2 style="margin:7px 0 12px;text-align:center;font-size:16px;color:#eef3ef">Critical Footage Requests ({critical})</h2><table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;table-layout:fixed;width:100%;overflow-wrap:anywhere"><thead><tr bgcolor="#f37870" style="background:#f37870;color:#141c18"><th width="23%" style="padding:8px 4px;font-size:12px;color:#141c18">Client / Vehicle</th><th width="17%" style="padding:8px 4px;font-size:12px;color:#141c18">Priority</th><th width="40%" style="padding:8px 4px;font-size:12px;color:#141c18">Incident Details</th><th width="20%" style="padding:8px 4px;font-size:12px;color:#141c18">Status</th></tr></thead><tbody>{critical_rows}</tbody></table></td></tr>
+<tr><td style="height:10px;font-size:1px">&nbsp;</td></tr>
+<tr><td bgcolor="#141c18" style="background:#141c18;border:1px solid #35433b;border-radius:8px;padding:8px;color:#eef3ef"><h2 style="margin:7px 0 12px;text-align:center;font-size:16px;color:#eef3ef">Other Footage Requests ({total - critical})</h2><table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;table-layout:fixed;width:100%;overflow-wrap:anywhere"><thead><tr bgcolor="#79e3a0" style="background:#79e3a0;color:#141c18"><th width="23%" style="padding:8px 4px;font-size:12px;color:#141c18">Client / Vehicle</th><th width="17%" style="padding:8px 4px;font-size:12px;color:#141c18">Priority</th><th width="40%" style="padding:8px 4px;font-size:12px;color:#141c18">Incident Details</th><th width="20%" style="padding:8px 4px;font-size:12px;color:#141c18">Status</th></tr></thead><tbody>{rows}</tbody></table>{date_note}</td></tr>
 <tr><td align="center" style="padding:12px 5px;font-size:11px;color:#b5c3ba">The future of safety on every journey<br>Customer-requested footage only &bull; Issues- Realtime</td></tr>
 </table></td></tr></table></body></html>"""
 OUTPUT.write_text(document, encoding="utf-8")
