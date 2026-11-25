@@ -110,51 +110,51 @@ for item in issues:
     key = item["resolved"].casefold()
     clients[item["client"]]["completed" if key == "yes" else "pending" if key == "no" else "other"] += 1
 
-def cell(value, color="#263238", bg="#ffffff", weight="normal"):
-    return f'<td bgcolor="{bg}" style="background-color:{bg};color:{color};font-weight:{weight};padding:9px 7px;border-bottom:1px solid #e1e5e8;font-size:13px;line-height:1.5;vertical-align:top;overflow-wrap:anywhere;">{esc(value)}</td>'
+def cell(value, color="#eef3ef", bg="#141c18", weight="normal"):
+    return f'<td bgcolor="{bg}" style="background-color:{bg};color:{color};font-weight:{weight};padding:9px 7px;border-bottom:1px solid #35433b;font-size:13px;line-height:1.5;vertical-align:top;overflow-wrap:anywhere;">{esc(value)}</td>'
 
 def kpi(label, value, color):
-    return f'<td width="50%" style="padding:4px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td bgcolor="#ffffff" align="center" style="background:#ffffff;border:1px solid #e1e5e8;border-radius:8px;padding:12px 5px;color:#263238"><span style="font-size:12px;color:#52616b">{esc(label)}</span><br><strong style="font-size:25px;color:{color}">{esc(str(value))}</strong></td></tr></table></td>'
+    return f'<td width="50%" style="padding:4px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td bgcolor="#141c18" align="center" style="background:#141c18;border:1px solid #35433b;border-radius:8px;padding:12px 5px;color:#eef3ef"><span style="font-size:12px;color:#b5c3ba">{esc(label)}</span><br><strong style="font-size:25px;color:{color}">{esc(str(value))}</strong></td></tr></table></td>'
 
 def bar(parts, denominator):
     if not denominator:
-        return '<div style="background:#e3e7e9;height:12px;border-radius:4px"></div>'
+        return '<div style="background:#303c34;height:12px;border-radius:4px"></div>'
     segments = "".join(f'<td width="{n / denominator * 100:.4f}%" bgcolor="{color}" style="background-color:{color};height:14px;font-size:1px;line-height:14px;">&nbsp;</td>' for n, color in parts if n)
     return f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="table-layout:fixed"><tr>{segments}</tr></table>'
 
-legend = f'<p style="font-size:12px;line-height:1.6;color:#263238;margin:8px 0 0"><strong style="color:#218838">Completed {resolved}</strong> &nbsp; <strong style="color:#b52e25">Pending {pending}</strong> &nbsp; Other {other}</p>'
-status_bar = bar([(resolved,"#32a83a"),(pending,"#c0392b"),(other,"#89939b")], total)
+legend = f'<p style="font-size:12px;line-height:1.6;color:#eef3ef;margin:8px 0 0"><strong style="color:#80e6a5">Completed {resolved}</strong> &nbsp; <strong style="color:#ffaaa3">Pending {pending}</strong> &nbsp; Other {other}</p>'
+status_bar = bar([(resolved,"#79e3a0"),(pending,"#f37870"),(other,"#9baaa0")], total)
 client_rows = []
 maximum = max((sum(c.values()) for c in clients.values()), default=0)
 for name, c in sorted(clients.items(), key=lambda pair: (-sum(pair[1].values()), pair[0].casefold())):
     n = sum(c.values())
-    chart = bar([(c["completed"],"#32a83a"),(c["pending"],"#c0392b"),(c["other"],"#89939b"),(maximum-n,"#e8ecee")], maximum)
-    client_rows.append(f'<tr><td style="padding:7px 0;border-bottom:1px solid #e8ecee;color:#263238;font-size:13px"><strong>{esc(name)}</strong><span style="font-size:12px"> &mdash; {n}</span><div style="padding-top:4px">{chart}</div><div style="font-size:11px;color:#52616b;padding-top:3px">Completed {c["completed"]} / Pending {c["pending"]} / Other {c["other"]}</div></td></tr>')
-client_chart = "".join(client_rows) or '<tr><td style="padding:8px;color:#52616b">No matching requests.</td></tr>'
+    chart = bar([(c["completed"],"#79e3a0"),(c["pending"],"#f37870"),(c["other"],"#9baaa0"),(maximum-n,"#303c34")], maximum)
+    client_rows.append(f'<tr><td style="padding:7px 0;border-bottom:1px solid #303c34;color:#eef3ef;font-size:13px"><strong>{esc(name)}</strong><span style="font-size:12px"> &mdash; {n}</span><div style="padding-top:4px">{chart}</div><div style="font-size:11px;color:#b5c3ba;padding-top:3px">Completed {c["completed"]} / Pending {c["pending"]} / Other {c["other"]}</div></td></tr>')
+client_chart = "".join(client_rows) or '<tr><td style="padding:8px;color:#b5c3ba">No matching requests.</td></tr>'
 records = []
 for i, item in enumerate(issues):
-    bg = "#ffffff" if i % 2 == 0 else "#eef4ef"
-    priority_color = "#b52e25" if item["priority"] == "Critical" else "#263238"
+    bg = "#141c18" if i % 2 == 0 else "#1e2922"
+    priority_color = "#ffaaa3" if item["priority"] == "Critical" else "#eef3ef"
     key = item["resolved"].casefold()
     resolution = "Completed" if key == "yes" else "Pending" if key == "no" else item["resolved"]
-    status_color = "#218838" if key == "yes" else "#b52e25" if key == "no" else "#52616b"
+    status_color = "#80e6a5" if key == "yes" else "#ffaaa3" if key == "no" else "#b5c3ba"
     details = f'<strong>{esc(item["request"])}</strong><br>{esc(item["details"])}<br><strong>Remarks:</strong> {esc(item["remarks"])}<br><strong>Current status:</strong> {esc(item["status"])}'
-    records.append(f'<tr>{cell(item["client"] + " / " + item["vehicle"], bg=bg, weight="bold")}{cell(item["priority"], priority_color, bg, "bold")}<td bgcolor="{bg}" style="background:{bg};color:#263238;padding:9px 7px;font-size:13px;line-height:1.5;border-bottom:1px solid #e1e5e8;vertical-align:top;overflow-wrap:anywhere">{details}</td>{cell(resolution, status_color, bg, "bold")}</tr>')
-rows = "".join(records) or '<tr><td colspan="4" style="padding:16px;color:#52616b">No matching customer footage requests.</td></tr>'
-date_note = f'<p style="font-size:12px;color:#795717;background:#fff3d5;padding:8px">{date_only_or_missing} source row(s) with date-only timestamps could not be placed in the reporting window.</p>' if date_only_or_missing else ""
+    records.append(f'<tr>{cell(item["client"] + " / " + item["vehicle"], bg=bg, weight="bold")}{cell(item["priority"], priority_color, bg, "bold")}<td bgcolor="{bg}" style="background:{bg};color:#eef3ef;padding:9px 7px;font-size:13px;line-height:1.5;border-bottom:1px solid #35433b;vertical-align:top;overflow-wrap:anywhere">{details}</td>{cell(resolution, status_color, bg, "bold")}</tr>')
+rows = "".join(records) or '<tr><td colspan="4" style="padding:16px;color:#b5c3ba">No matching customer footage requests.</td></tr>'
+date_note = f'<p style="font-size:12px;color:#ffe1a1;background:#382f20;padding:8px">{date_only_or_missing} source row(s) with date-only timestamps could not be placed in the reporting window.</p>' if date_only_or_missing else ""
 window = f"{START:%d %b %Y}, 9:00 AM – {END:%d %b %Y}, 9:00 AM IST"
-document = f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>Cautio | Footage Request Dashboard</title></head>
-<body bgcolor="#f4f5f8" style="margin:0;padding:0;background:#f4f5f8;color:#263238;font-family:Arial,sans-serif">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#f4f5f8"><tr><td align="center" style="padding:8px">
+document = f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark"><title>Cautio | Footage Request Dashboard</title></head>
+<body bgcolor="#0c120f" style="margin:0;padding:0;background:#0c120f;color:#eef3ef;font-family:Arial,sans-serif">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#0c120f"><tr><td align="center" style="padding:8px">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%">
-<tr><td bgcolor="#32a83a" align="center" style="background:#32a83a;color:#ffffff;padding:18px 10px;border-radius:10px"><strong style="font-size:24px;letter-spacing:-1px;color:#ffffff">cautio</strong><h1 style="font-size:21px;margin:8px 0 5px;color:#ffffff">Footage Request Dashboard</h1><p style="font-size:13px;margin:0;color:#ffffff">Client-wise request monitoring and completion report</p><p style="font-size:12px;margin:7px 0 0;color:#ffffff">{window}</p></td></tr>
-<tr><td style="padding:10px 0"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="table-layout:fixed"><tr>{kpi("Total Requests",total,"#263238")}{kpi("Completed",resolved,"#218838")}</tr><tr>{kpi("Pending",pending,"#b52e25")}{kpi("Completion Rate",rate,"#263238")}</tr></table><p style="margin:4px 0 0;text-align:center;font-size:13px;color:#263238">Critical: <strong>{critical}</strong> &nbsp; | &nbsp; Other resolution: <strong>{other}</strong></p></td></tr>
-<tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #e1e5e8;border-radius:8px;padding:14px;color:#263238"><h2 style="margin:0 0 12px;text-align:center;font-size:16px;color:#263238">Completed vs Pending</h2>{status_bar}{legend}</td></tr>
+<tr><td bgcolor="#141c18" align="center" style="background:#141c18;color:#eef3ef;padding:22px 12px;border:1px solid #35433b;border-top:4px solid #79e3a0;border-radius:10px"><strong style="font-size:32px;letter-spacing:-1.5px;color:#eef3ef">caut<span style="color:#79e3a0">i</span>o</strong><h1 style="font-size:21px;margin:12px 0 5px;color:#eef3ef">Footage Request Dashboard</h1><p style="font-size:13px;margin:0;color:#b5c3ba">Client-wise request monitoring and completion report</p><p style="font-size:12px;margin:7px 0 0;color:#79e3a0">{window}</p></td></tr>
+<tr><td style="padding:10px 0"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="table-layout:fixed"><tr>{kpi("Total Requests",total,"#eef3ef")}{kpi("Completed",resolved,"#80e6a5")}</tr><tr>{kpi("Pending",pending,"#ffaaa3")}{kpi("Completion Rate",rate,"#eef3ef")}</tr></table><p style="margin:4px 0 0;text-align:center;font-size:13px;color:#eef3ef">Critical: <strong>{critical}</strong> &nbsp; | &nbsp; Other resolution: <strong>{other}</strong></p></td></tr>
+<tr><td bgcolor="#141c18" style="background:#141c18;border:1px solid #35433b;border-radius:8px;padding:14px;color:#eef3ef"><h2 style="margin:0 0 12px;text-align:center;font-size:16px;color:#eef3ef">Completed vs Pending</h2>{status_bar}{legend}</td></tr>
 <tr><td style="height:10px;font-size:1px">&nbsp;</td></tr>
-<tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #e1e5e8;border-radius:8px;padding:14px;color:#263238"><h2 style="margin:0 0 6px;text-align:center;font-size:16px;color:#263238">Client-wise Requests</h2><table role="presentation" width="100%" cellspacing="0" cellpadding="0">{client_chart}</table></td></tr>
+<tr><td bgcolor="#141c18" style="background:#141c18;border:1px solid #35433b;border-radius:8px;padding:14px;color:#eef3ef"><h2 style="margin:0 0 6px;text-align:center;font-size:16px;color:#eef3ef">Client-wise Requests</h2><table role="presentation" width="100%" cellspacing="0" cellpadding="0">{client_chart}</table></td></tr>
 <tr><td style="height:10px;font-size:1px">&nbsp;</td></tr>
-<tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #e1e5e8;border-radius:8px;padding:8px;color:#263238"><h2 style="margin:7px 0 12px;text-align:center;font-size:16px;color:#263238">Footage Request Details</h2><table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;table-layout:fixed;width:100%;overflow-wrap:anywhere"><thead><tr bgcolor="#32a83a" style="background:#32a83a;color:#ffffff"><th width="23%" style="padding:8px 4px;font-size:12px;color:#ffffff">Client / Vehicle</th><th width="17%" style="padding:8px 4px;font-size:12px;color:#ffffff">Priority</th><th width="40%" style="padding:8px 4px;font-size:12px;color:#ffffff">Incident Details</th><th width="20%" style="padding:8px 4px;font-size:12px;color:#ffffff">Status</th></tr></thead><tbody>{rows}</tbody></table>{date_note}</td></tr>
-<tr><td align="center" style="padding:12px 5px;font-size:11px;color:#52616b">Customer-requested footage only &bull; Read-only report from Issues- Realtime</td></tr>
+<tr><td bgcolor="#141c18" style="background:#141c18;border:1px solid #35433b;border-radius:8px;padding:8px;color:#eef3ef"><h2 style="margin:7px 0 12px;text-align:center;font-size:16px;color:#eef3ef">Footage Request Details</h2><table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;table-layout:fixed;width:100%;overflow-wrap:anywhere"><thead><tr bgcolor="#79e3a0" style="background:#79e3a0;color:#141c18"><th width="23%" style="padding:8px 4px;font-size:12px;color:#141c18">Client / Vehicle</th><th width="17%" style="padding:8px 4px;font-size:12px;color:#141c18">Priority</th><th width="40%" style="padding:8px 4px;font-size:12px;color:#141c18">Incident Details</th><th width="20%" style="padding:8px 4px;font-size:12px;color:#141c18">Status</th></tr></thead><tbody>{rows}</tbody></table>{date_note}</td></tr>
+<tr><td align="center" style="padding:12px 5px;font-size:11px;color:#b5c3ba">The future of safety on every journey<br>Customer-requested footage only &bull; Issues- Realtime</td></tr>
 </table></td></tr></table></body></html>"""
 OUTPUT.write_text(document, encoding="utf-8")
 print(f"wrote {OUTPUT}; footage_requests={total}; critical={critical}; resolved={resolved}; not_resolved={not_resolved}")
